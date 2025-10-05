@@ -1,0 +1,991 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Solara Executor",
+   LoadingTitle = "Solara",
+   LoadingSubtitle = "by solara",
+   ConfigurationSaving = {Enabled = false},
+   Discord = {Enabled = false},
+   KeySystem = false
+})
+
+local MainTab = Window:CreateTab("Main")
+local ESPTab = Window:CreateTab("ESP")
+local DesyncTab = Window:CreateTab("Desync")
+local AimbotTab = Window:CreateTab("Aimbot")
+
+local espEnabled = false
+local desyncEnabled = false
+local showBoxes = true
+local showBones = true
+local showHighlight = true
+local showNames = true
+local showDistance = true
+local showTracers = false
+local autoRefresh = true
+local espFolders = {}
+local desyncConnection = nil
+local refreshConnection = nil
+local aimbotEnabled = false
+local aimbotKey = "RightMouseButton"
+local aimbotFOV = 50
+local aimbotPrediction = 0.1
+local aimbotSmoothness = 0.5
+local silentAimEnabled = false
+local silentAimFOV = 100
+local flyEnabled = false
+local flySpeed = 50
+local flyConnection = nil
+local jumpPowerEnabled = false
+local jumpPowerValue = 100
+local speedEnabled = false
+local speedValue = 50
+local noClipEnabled = false
+local noClipConnection = nil
+local noclipDesyncEnabled = false
+local noclipDesyncConnection = nil
+local autoStompEnabled = false
+local autoStompConnection = nil
+local espColor = Color3.new(1, 0, 0)
+local teamCheck = true
+
+local function createESP(player)
+    if espFolders[player] then return end
+    
+    local folder = Instance.new("Folder")
+    folder.Name = player.Name .. "_ESP"
+    espFolders[player] = folder
+    
+    local function updateESP()
+        if not espEnabled or not player.Character then 
+            folder:ClearAllChildren()
+            return
+        end
+        
+        local character = player.Character
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        
+        if not humanoidRootPart or not humanoid or humanoid.Health <= 0 then
+            folder:ClearAllChildren()
+            return
+        end
+        
+        local localPlayer = Players.LocalPlayer
+        local localCharacter = localPlayer.Character
+        local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+        
+        if showHighlight and not folder:FindFirstChild("Highlight") then
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "Highlight"
+            highlight.FillColor = teamCheck and (player.Team == localPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or espColor
+            highlight.OutlineColor = Color3.new(1, 1, 1)
+            highlight.FillTransparency = 0.5
+            highlight.Parent = folder
+        end
+        
+        if showBoxes and not folder:FindFirstChild("Box") then
+            local box = Instance.new("BoxHandleAdornment")
+            box.Name = "Box"
+            box.Adornee = humanoidRootPart
+            box.Size = Vector3.new(4, 6, 2)
+            box.Color3 = teamCheck and (player.Team == localPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or espColor
+            box.Transparency = 0.3
+            box.AlwaysOnTop = true
+            box.Parent = folder
+        end
+        
+        if showBones then
+            if folder:FindFirstChild("Bones") then
+                folder.Bones:Destroy()
+            end
+            local bonesFolder = Instance.new("Folder")
+            bonesFolder.Name = "Bones"
+            bonesFolder.Parent = folder
+            
+            local boneConnections = {
+                {"Head", "UpperTorso"},
+                {"UpperTorso", "LowerTorso"},
+                {"UpperTorso", "LeftUpperArm"},
+                {"LeftUpperArm", "LeftLowerArm"},
+                {"LeftLowerArm", "LeftHand"},
+                {"UpperTorso", "RightUpperArm"},
+                {"RightUpperArm", "RightLowerArm"},
+                {"RightLowerArm", "RightHand"},
+                {"LowerTorso", "LeftUpperLeg"},
+                {"LeftUpperLeg", "LeftLowerLeg"},
+                {"LeftLowerLeg", "LeftFoot"},
+                {"LowerTorso", "RightUpperLeg"},
+                {"RightUpperLeg", "RightLowerLeg"},
+                {"RightLowerLeg", "RightFoot"}
+            }
+            
+            for _, connection in pairs(boneConnections) do
+                local part1 = character:FindFirstChild(connection[1])
+                local part2 = character:FindFirstChild(connection[2])
+                
+                if part1 and part2 then
+                    local beam = Instance.new("Beam")
+                    beam.Attachment0 = Instance.new("Attachment")
+                    beam.Attachment0.Parent = part1
+                    beam.Attachment1 = Instance.new("Attachment")
+                    beam.Attachment1.Parent = part2
+                    beam.Color = ColorSequence.new(teamCheck and (player.Team == localPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or espColor)
+                    beam.Width0 = 0.1
+                    beam.Width1 = 0.1
+                    beam.Parent = bonesFolder
+                end
+            end
+        end
+        
+        if (showNames or showDistance) and localRoot then
+            if folder:FindFirstChild("Billboard") then
+                folder.Billboard:Destroy()
+            end
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "Billboard"
+            billboard.Adornee = humanoidRootPart
+            billboard.Size = UDim2.new(0, 200, 0, 50)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.AlwaysOnTop = true
+            
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.TextStrokeTransparency = 0
+            textLabel.TextSize = 14
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.TextColor3 = teamCheck and (player.Team == localPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or espColor
+            
+            local distance = (humanoidRootPart.Position - localRoot.Position).Magnitude
+            local text = ""
+            if showNames then text = player.Name end
+            if showDistance then text = text .. (showNames and " (" or "") .. math.floor(distance) .. "m" .. (showNames and ")" or "") end
+            
+            textLabel.Text = text
+            textLabel.Parent = billboard
+            billboard.Parent = folder
+        end
+    end
+    
+    folder.Parent = workspace
+    updateESP()
+    
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        updateESP()
+    end)
+    
+    player.CharacterAdded:Connect(function()
+        wait(1)
+        updateESP()
+    end)
+end
+
+local function createTracer(player)
+    if not espFolders[player] then return end
+    
+    local folder = espFolders[player]
+    if folder:FindFirstChild("Tracer") then return end
+    
+    local tracer = Instance.new("Frame")
+    tracer.Name = "Tracer"
+    tracer.BackgroundColor3 = Color3.new(1, 1, 1)
+    tracer.BorderSizePixel = 0
+    tracer.Size = UDim2.new(0, 2, 0, 2)
+    tracer.Visible = false
+    
+    local function updateTracer()
+        if not espEnabled or not player.Character then 
+            tracer.Visible = false
+            return
+        end
+        
+        local character = player.Character
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        local localPlayer = Players.LocalPlayer
+        local localCharacter = localPlayer.Character
+        local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+        
+        if humanoidRootPart and localRoot then
+            local screenPoint, onScreen = workspace.CurrentCamera:WorldToViewportPoint(humanoidRootPart.Position)
+            
+            if onScreen then
+                tracer.Position = UDim2.new(0, screenPoint.X, 0, screenPoint.Y)
+                tracer.Visible = true
+                tracer.BackgroundColor3 = teamCheck and (player.Team == localPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or espColor
+            else
+                tracer.Visible = false
+            end
+        else
+            tracer.Visible = false
+        end
+    end
+    
+    tracer.Parent = folder
+    RunService.Heartbeat:Connect(updateTracer)
+end
+
+local function removeESP(player)
+    if espFolders[player] then
+        espFolders[player]:Destroy()
+        espFolders[player] = nil
+    end
+end
+
+local function toggleESP(state)
+    espEnabled = state
+    if state then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer then
+                createESP(player)
+                if showTracers then
+                    createTracer(player)
+                end
+            end
+        end
+    else
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+        end
+    end
+end
+
+local function updateESPColors()
+    for player, folder in pairs(espFolders) do
+        if folder and player.Character then
+            local localPlayer = Players.LocalPlayer
+            local color = teamCheck and (player.Team == localPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or espColor
+            
+            for _, obj in pairs(folder:GetChildren()) do
+                if obj:IsA("Highlight") then
+                    obj.FillColor = color
+                elseif obj:IsA("BoxHandleAdornment") then
+                    obj.Color3 = color
+                elseif obj:IsA("Folder") and obj.Name == "Bones" then
+                    for _, beam in pairs(obj:GetChildren()) do
+                        if beam:IsA("Beam") then
+                            beam.Color = ColorSequence.new(color)
+                        end
+                    end
+                elseif obj:IsA("BillboardGui") then
+                    local textLabel = obj:FindFirstChildWhichIsA("TextLabel")
+                    if textLabel then
+                        textLabel.TextColor3 = color
+                    end
+                elseif obj:IsA("Frame") and obj.Name == "Tracer" then
+                    obj.BackgroundColor3 = color
+                end
+            end
+        end
+    end
+end
+
+local function startDesync()
+    if desyncConnection then return end
+    
+    desyncConnection = RunService.Heartbeat:Connect(function()
+        if not desyncEnabled or not Players.LocalPlayer.Character then return end
+        
+        local character = Players.LocalPlayer.Character
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoid and rootPart then
+            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            task.wait()
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            
+            local currentCFrame = rootPart.CFrame
+            rootPart.Velocity = Vector3.new(0, 0, 0)
+            rootPart.RotVelocity = Vector3.new(0, 0, 0)
+            
+            task.spawn(function()
+                for i = 1, 3 do
+                    rootPart.CFrame = currentCFrame
+                    task.wait()
+                end
+            end)
+        end
+    end)
+end
+
+local function stopDesync()
+    if desyncConnection then
+        desyncConnection:Disconnect()
+        desyncConnection = nil
+    end
+end
+
+local function toggleDesync(state)
+    desyncEnabled = state
+    if state then
+        startDesync()
+    else
+        stopDesync()
+    end
+end
+
+local function improveDesync()
+    if not desyncEnabled or not Players.LocalPlayer.Character then return end
+    
+    local character = Players.LocalPlayer.Character
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    
+    if humanoid and rootPart then
+        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+        
+        task.spawn(function()
+            for i = 1, 5 do
+                if rootPart then
+                    local currentPos = rootPart.Position
+                    rootPart.CFrame = CFrame.new(currentPos + Vector3.new(math.random(-1, 1), 0, math.random(-1, 1)))
+                    task.wait(0.01)
+                    if rootPart then
+                        rootPart.CFrame = CFrame.new(currentPos)
+                    end
+                end
+                task.wait(0.05)
+            end
+        end)
+        
+        task.wait(0.1)
+        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+    end
+end
+
+local function toggleNoclipDesync(state)
+    noclipDesyncEnabled = state
+    if noclipDesyncConnection then
+        noclipDesyncConnection:Disconnect()
+        noclipDesyncConnection = nil
+    end
+    
+    if state then
+        noclipDesyncConnection = RunService.Stepped:Connect(function()
+            if not Players.LocalPlayer.Character then return end
+            
+            for _, part in pairs(Players.LocalPlayer.Character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                    part.Velocity = Vector3.new(math.random(-5, 5), math.random(-2, 2), math.random(-5, 5))
+                end
+            end
+            
+            local root = Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.CFrame = root.CFrame + Vector3.new(math.random(-0.5, 0.5), math.random(-0.2, 0.2), math.random(-0.5, 0.5))
+            end
+        end)
+    end
+end
+
+local function toggleAutoStomp(state)
+    autoStompEnabled = state
+    if autoStompConnection then
+        autoStompConnection:Disconnect()
+        autoStompConnection = nil
+    end
+    
+    if state then
+        autoStompConnection = RunService.Heartbeat:Connect(function()
+            if not Players.LocalPlayer.Character then return end
+            local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
+end
+
+local function startAutoRefresh()
+    if refreshConnection then return end
+    
+    refreshConnection = RunService.Heartbeat:Connect(function()
+        if not autoRefresh then return end
+        
+        for player, folder in pairs(espFolders) do
+            if not player or not player.Parent then
+                removeESP(player)
+            end
+        end
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer and not espFolders[player] and espEnabled then
+                createESP(player)
+                if showTracers then
+                    createTracer(player)
+                end
+            end
+        end
+    end)
+end
+
+local function getClosestPlayer()
+    local localPlayer = Players.LocalPlayer
+    local localCharacter = localPlayer.Character
+    local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+    
+    if not localRoot then return nil end
+    
+    local closestPlayer = nil
+    local closestDistance = aimbotFOV
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local character = player.Character
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and humanoid.Health > 0 and humanoidRootPart then
+                local screenPoint = workspace.CurrentCamera:WorldToViewportPoint(humanoidRootPart.Position)
+                local mouse = UserInputService:GetMouseLocation()
+                local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mouse).Magnitude
+                
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+local function getPredictedPosition(target)
+    if not target.Character then return nil end
+    local root = target.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    
+    local velocity = root.Velocity
+    return root.Position + (velocity * aimbotPrediction)
+end
+
+local function smoothAim(targetPosition)
+    local camera = workspace.CurrentCamera
+    local current = camera.CFrame
+    local goal = CFrame.new(camera.CFrame.Position, targetPosition)
+    
+    return current:Lerp(goal, aimbotSmoothness)
+end
+
+local aimbotConnection
+local function toggleAimbot(state)
+    aimbotEnabled = state
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+    
+    if state then
+        aimbotConnection = UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton2 then
+                local target = getClosestPlayer()
+                if target and target.Character then
+                    local humanoidRootPart = target.Character:FindFirstChild("HumanoidRootPart")
+                    if humanoidRootPart then
+                        local predictedPos = getPredictedPosition(target)
+                        if predictedPos then
+                            workspace.CurrentCamera.CFrame = smoothAim(predictedPos)
+                        else
+                            workspace.CurrentCamera.CFrame = smoothAim(humanoidRootPart.Position)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end
+
+local function toggleSilentAim(state)
+    silentAimEnabled = state
+end
+
+local function createFOVCircle()
+    local circle = Drawing.new("Circle")
+    circle.Visible = false
+    circle.Radius = aimbotFOV
+    circle.Color = Color3.new(1, 1, 1)
+    circle.Thickness = 2
+    circle.Filled = false
+    return circle
+end
+
+local fovCircle = createFOVCircle()
+local showFOV = false
+
+local function toggleFly(state)
+    flyEnabled = state
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    
+    if state then
+        flyConnection = RunService.Heartbeat:Connect(function()
+            if not Players.LocalPlayer.Character then return end
+            local root = Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            
+            if root and humanoid then
+                humanoid.PlatformStand = true
+                
+                local camera = workspace.CurrentCamera
+                local moveDirection = Vector3.new()
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveDirection = moveDirection + camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveDirection = moveDirection - camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveDirection = moveDirection - camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveDirection = moveDirection + camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    moveDirection = moveDirection + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    moveDirection = moveDirection - Vector3.new(0, 1, 0)
+                end
+                
+                if moveDirection.Magnitude > 0 then
+                    root.Velocity = moveDirection.Unit * flySpeed
+                else
+                    root.Velocity = Vector3.new(0, 0, 0)
+                end
+            end
+        end)
+    else
+        if Players.LocalPlayer.Character then
+            local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.PlatformStand = false
+            end
+        end
+    end
+end
+
+local function toggleJumpPower(state)
+    jumpPowerEnabled = state
+    if state and Players.LocalPlayer.Character then
+        local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.JumpPower = jumpPowerValue
+        end
+    elseif Players.LocalPlayer.Character then
+        local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.JumpPower = 50
+        end
+    end
+end
+
+local function toggleSpeed(state)
+    speedEnabled = state
+    if state and Players.LocalPlayer.Character then
+        local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = speedValue
+        end
+    elseif Players.LocalPlayer.Character then
+        local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 16
+        end
+    end
+end
+
+local function toggleNoClip(state)
+    noClipEnabled = state
+    if noClipConnection then
+        noClipConnection:Disconnect()
+        noClipConnection = nil
+    end
+    
+    if state then
+        noClipConnection = RunService.Stepped:Connect(function()
+            if Players.LocalPlayer.Character then
+                for _, part in pairs(Players.LocalPlayer.Character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end
+
+ESPTab:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleESP(value)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Boxes",
+    CurrentValue = true,
+    Callback = function(value)
+        showBoxes = value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Bones",
+    CurrentValue = true,
+    Callback = function(value)
+        showBones = value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Highlight",
+    CurrentValue = true,
+    Callback = function(value)
+        showHighlight = value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Player Names",
+    CurrentValue = true,
+    Callback = function(value)
+        showNames = value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Distance",
+    CurrentValue = true,
+    Callback = function(value)
+        showDistance = value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Tracers",
+    CurrentValue = false,
+    Callback = function(value)
+        showTracers = value
+        if value then
+            for player, folder in pairs(espFolders) do
+                createTracer(player)
+            end
+        else
+            for player, folder in pairs(espFolders) do
+                if folder:FindFirstChild("Tracer") then
+                    folder.Tracer:Destroy()
+                end
+            end
+        end
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Auto Refresh",
+    CurrentValue = true,
+    Callback = function(value)
+        autoRefresh = value
+        if value then
+            startAutoRefresh()
+        elseif refreshConnection then
+            refreshConnection:Disconnect()
+            refreshConnection = nil
+        end
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Team Check",
+    CurrentValue = true,
+    Callback = function(value)
+        teamCheck = value
+        updateESPColors()
+    end
+})
+
+ESPTab:CreateColorPicker({
+    Name = "ESP Color",
+    Color = Color3.new(1, 0, 0),
+    Callback = function(color)
+        espColor = color
+        updateESPColors()
+    end
+})
+
+DesyncTab:CreateToggle({
+    Name = "Enable Desync",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleDesync(value)
+    end
+})
+
+DesyncTab:CreateToggle({
+    Name = "Noclip Desync",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleNoclipDesync(value)
+    end
+})
+
+DesyncTab:CreateToggle({
+    Name = "Auto Stomp",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleAutoStomp(value)
+    end
+})
+
+DesyncTab:CreateButton({
+    Name = "Improved Desync",
+    Callback = function()
+        improveDesync()
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Enable Aimbot",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleAimbot(value)
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Silent Aim",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleSilentAim(value)
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Show FOV",
+    CurrentValue = false,
+    Callback = function(value)
+        showFOV = value
+        fovCircle.Visible = value
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Aimbot FOV",
+    Range = {10, 300},
+    Increment = 10,
+    Suffix = "px",
+    CurrentValue = 50,
+    Callback = function(value)
+        aimbotFOV = value
+        fovCircle.Radius = value
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Silent Aim FOV",
+    Range = {10, 300},
+    Increment = 10,
+    Suffix = "px",
+    CurrentValue = 100,
+    Callback = function(value)
+        silentAimFOV = value
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Prediction",
+    Range = {0, 0.5},
+    Increment = 0.01,
+    Suffix = "sec",
+    CurrentValue = 0.1,
+    Callback = function(value)
+        aimbotPrediction = value
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Smoothness",
+    Range = {0.1, 1},
+    Increment = 0.1,
+    Suffix = "smooth",
+    CurrentValue = 0.5,
+    Callback = function(value)
+        aimbotSmoothness = value
+    end
+})
+
+AimbotTab:CreateKeybind({
+    Name = "Aimbot Key",
+    CurrentKeybind = "RightMouseButton",
+    HoldToInteract = false,
+    Callback = function(Key)
+        aimbotKey = Key
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "Fly",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleFly(value)
+    end
+})
+
+MainTab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {20, 200},
+    Increment = 10,
+    Suffix = "studs",
+    CurrentValue = 50,
+    Callback = function(value)
+        flySpeed = value
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "Super Jump",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleJumpPower(value)
+    end
+})
+
+MainTab:CreateSlider({
+    Name = "Jump Power",
+    Range = {50, 500},
+    Increment = 25,
+    Suffix = "power",
+    CurrentValue = 100,
+    Callback = function(value)
+        jumpPowerValue = value
+        if jumpPowerEnabled and Players.LocalPlayer.Character then
+            local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.JumpPower = value
+            end
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "Speed Hack",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleSpeed(value)
+    end
+})
+
+MainTab:CreateSlider({
+    Name = "Speed Value",
+    Range = {16, 200},
+    Increment = 5,
+    Suffix = "studs",
+    CurrentValue = 50,
+    Callback = function(value)
+        speedValue = value
+        if speedEnabled and Players.LocalPlayer.Character then
+            local humanoid = Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = value
+            end
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "NoClip",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleNoClip(value)
+    end
+})
+
+MainTab:CreateButton({
+    Name = "Refresh ESP",
+    Callback = function()
+        toggleESP(false)
+        task.wait(0.1)
+        toggleESP(true)
+    end
+})
+
+RunService.Heartbeat:Connect(function()
+    if showFOV then
+        local mouse = UserInputService:GetMouseLocation()
+        fovCircle.Position = Vector2.new(mouse.X, mouse.Y)
+    end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    if espEnabled then
+        task.wait(2)
+        createESP(player)
+        if showTracers then
+            createTracer(player)
+        end
+    end
+})
+
+Players.PlayerRemoving:Connect(function(player)
+    removeESP(player)
+end)
+
+Players.LocalPlayer.CharacterAdded:Connect(function()
+    if flyEnabled then
+        task.wait(1)
+        toggleFly(true)
+    end
+    if jumpPowerEnabled then
+        task.wait(1)
+        toggleJumpPower(true)
+    end
+    if speedEnabled then
+        task.wait(1)
+        toggleSpeed(true)
+    end
+    if noClipEnabled then
+        task.wait(1)
+        toggleNoClip(true)
+    end
+    if noclipDesyncEnabled then
+        task.wait(1)
+        toggleNoclipDesync(true)
+    end
+end)
+
+if autoRefresh then
+    startAutoRefresh()
+end
+
+local function cleanup()
+    if flyConnection then flyConnection:Disconnect() end
+    if noClipConnection then noClipConnection:Disconnect() end
+    if desyncConnection then desyncConnection:Disconnect() end
+    if noclipDesyncConnection then noclipDesyncConnection:Disconnect() end
+    if autoStompConnection then autoStompConnection:Disconnect() end
+    if aimbotConnection then aimbotConnection:Disconnect() end
+    if refreshConnection then refreshConnection:Disconnect() end
+    if fovCircle then fovCircle:Remove() end
+    for player, folder in pairs(espFolders) do
+        if folder then
+            folder:Destroy()
+        end
+    end
+end
+
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name == "Rayfield" then
+        cleanup()
+    end
+end)
